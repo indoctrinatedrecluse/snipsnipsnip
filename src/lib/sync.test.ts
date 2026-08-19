@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 
 // The sync engine needs a token to run; we don't want to touch real GIS.
 vi.mock("@/lib/gdrive-auth", () => ({
-  getAccessToken: () => "fake-access-token",
+  ensureAccessToken: () => Promise.resolve("fake-access-token"),
 }));
 
 import {

@@ -2,10 +2,13 @@ import { create } from "zustand";
 
 import { getMeta } from "@/lib/db";
 import {
-  getAccessToken,
+  fetchUserInfo,
   getClientId,
+  getStoredUserInfo,
+  hasStoredAuth,
   requestAccessToken,
   signOutFromGoogle,
+  type UserInfo,
 } from "@/lib/gdrive-auth";
 import { LAST_SYNCED_KEY, syncWithDrive } from "@/lib/sync";
 
@@ -15,6 +18,7 @@ interface SyncState {
   isSyncing: boolean;
   lastSyncedAt: number | null;
   error: string | null;
+  user: UserInfo | null;
 
   refreshAuth: () => Promise<void>;
   signIn: () => Promise<void>;
@@ -24,15 +28,17 @@ interface SyncState {
 
 export const useSyncStore = create<SyncState>()((set, get) => ({
   isConfigured: getClientId() !== null,
-  isSignedIn: getAccessToken() !== null,
+  isSignedIn: hasStoredAuth(),
   isSyncing: false,
   lastSyncedAt: null,
   error: null,
+  user: getStoredUserInfo(),
 
   refreshAuth: async () => {
     set({
       isConfigured: getClientId() !== null,
-      isSignedIn: getAccessToken() !== null,
+      isSignedIn: hasStoredAuth(),
+      user: getStoredUserInfo(),
     });
     const lastSynced = await getMeta<number>(LAST_SYNCED_KEY);
     set({ lastSyncedAt: lastSynced ?? null });
@@ -43,6 +49,8 @@ export const useSyncStore = create<SyncState>()((set, get) => ({
     try {
       await requestAccessToken();
       set({ isSignedIn: true, isConfigured: true });
+      const user = await fetchUserInfo();
+      set({ user });
       await get().syncNow();
     } catch (error) {
       set({
@@ -55,7 +63,7 @@ export const useSyncStore = create<SyncState>()((set, get) => ({
 
   signOut: async () => {
     await signOutFromGoogle();
-    set({ isSignedIn: false, error: null });
+    set({ isSignedIn: false, error: null, user: null });
   },
 
   syncNow: async () => {

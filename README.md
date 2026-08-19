@@ -89,6 +89,13 @@ files. Sync is automatic: it runs after edits (debounced), when the app starts
 (if signed in), and when the connection returns. Conflicts are resolved
 last-write-wins by timestamp.
 
+Sign-in works in **both** the browser and the packaged desktop app. On
+desktop, the app opens your **system browser** for Google's consent screen,
+then catches the redirect on a local loopback address — so you just sign in
+with your Google account and approve the permissions (read your email/name and
+manage the app data folder). Your name and profile picture then appear in the
+sidebar's sync control.
+
 > Until configured, the app works fully offline with a **"Drive sync not
 > configured"** indicator in the sidebar.
 
@@ -112,18 +119,17 @@ last-write-wins by timestamp.
    application**. Under **Authorized JavaScript origins** add:
    - `http://localhost:5173` (dev server)
    - `http://localhost:4173` (production preview / `run.ps1`)
+   Under **Authorized redirect URIs** add:
+   - `http://localhost:41909/callback` (desktop app loopback sign-in)
    Click **Create**, then copy the **client ID** (looks like
    `xxxx.apps.googleusercontent.com`).
 5. **Wire it into the app**: copy `.env.example` to `.env` in the project
    root and set `VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com`.
-6. **Restart** the dev server (`npm run dev`) — Vite reads environment
-   variables at startup.
-7. Open the app, click the **Sync** control in the sidebar footer, and choose
-   **Sign in with Google**. Approve the prompt, and your snippets will sync to
-   your Drive's private app data folder.
-
-> **Note:** Drive sync is currently configured for the **web** app origins
-> above. A future step will extend the setup to the packaged Tauri desktop app.
+6. **Restart** the app (`npm run dev`, or rebuild the desktop app with
+   `npm run tauri:build`) — the environment variable is baked in at build time.
+7. Click the **Sync** control in the sidebar footer and choose **Sign in with
+   Google**. Approve the prompt, and your snippets will sync to your Drive's
+   private app data folder. Your account name and avatar appear in the sidebar.
 
 ---
 

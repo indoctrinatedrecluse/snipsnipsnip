@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: mocks.invoke,
+}));
+
 type TokenResponse = {
   access_token?: string;
   expires_in?: number;
@@ -85,5 +91,89 @@ describe("gdrive-auth", () => {
 
     await auth.signOutFromGoogle();
     expect(auth.getAccessToken()).toBeNull();
+  });
+
+  describe("Tauri runtime", () => {
+    beforeEach(() => {
+      Object.defineProperty(window, "__TAURI_INTERNALS__", {
+        configurable: true,
+        value: {},
+      });
+      mocks.invoke.mockReset();
+    });
+
+    afterEach(() => {
+      delete (window as { __TAURI_INTERNALS__?: unknown })
+        .__TAURI_INTERNALS__;
+    });
+
+    it("signs in through the Rust backend and stores the tokens", async () => {
+      mocks.invoke.mockResolvedValueOnce({
+        access_token: "desktop-token",
+        refresh_token: "refresh-1",
+        expires_in: 3600,
+      });
+
+      const response = await auth.requestAccessToken();
+
+      expect(response.access_token).toBe("desktop-token");
+      expect(auth.getAccessToken()).toBe("desktop-token");
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        "drive_oauth",
+        expect.objectContaining({
+          scopes: expect.stringContaining("drive.appdata"),
+        }),
+      );
+    });
+
+    it("silently refreshes an expired token with the stored refresh token", async () => {
+      window.localStorage.setItem(
+        "snippetvault-gdrive-token",
+        JSON.stringify({ token: "expired", expiry: Date.now() - 1000 }),
+      );
+      window.localStorage.setItem(
+        "snippetvault-gdrive-refresh",
+        "refresh-1",
+      );
+      mocks.invoke.mockResolvedValueOnce({
+        access_token: "fresh-token",
+        refresh_token: null,
+        expires_in: 3600,
+      });
+
+      const token = await auth.ensureAccessToken();
+
+      expect(token).toBe("fresh-token");
+      expect(auth.getAccessToken()).toBe("fresh-token");
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        "drive_refresh",
+        expect.objectContaining({ refreshToken: "refresh-1" }),
+      );
+    });
+
+    it("fetches and persists the user profile", async () => {
+      mocks.invoke.mockResolvedValueOnce({
+        access_token: "desktop-token",
+        refresh_token: "refresh-1",
+        expires_in: 3600,
+      });
+      await auth.requestAccessToken();
+
+      mocks.invoke.mockResolvedValueOnce({
+        sub: "123",
+        name: "Test User",
+        email: "user@example.com",
+        picture: "https://example.com/avatar.png",
+      });
+
+      const user = await auth.fetchUserInfo();
+
+      expect(user?.name).toBe("Test User");
+      expect(auth.getStoredUserInfo()?.email).toBe("user@example.com");
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        "drive_userinfo",
+        expect.objectContaining({ accessToken: "desktop-token" }),
+      );
+    });
   });
 });

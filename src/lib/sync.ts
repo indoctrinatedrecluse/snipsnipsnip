@@ -17,7 +17,7 @@ import {
   putSnippet,
   setMeta,
 } from "@/lib/db";
-import { getAccessToken } from "@/lib/gdrive-auth";
+import { ensureAccessToken } from "@/lib/gdrive-auth";
 import { useSnippetStore } from "@/stores/snippet-store";
 import type { Snippet } from "@/types/snippet";
 
@@ -53,7 +53,7 @@ export interface SyncResult {
 export class SyncError extends Error {}
 
 async function driveJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAccessToken();
+  const token = await ensureAccessToken();
   if (!token) throw new SyncError("Not signed in to Google Drive.");
   const response = await fetch(`${API_BASE}/${path}`, {
     ...init,
@@ -77,7 +77,7 @@ async function uploadMultipart(
   method: "POST" | "PATCH",
   fileId?: string,
 ): Promise<{ id?: string; modifiedTime?: string }> {
-  const token = getAccessToken();
+  const token = await ensureAccessToken();
   if (!token) throw new SyncError("Not signed in to Google Drive.");
   const path = fileId
     ? `${UPLOAD_BASE}/files/${fileId}?uploadType=multipart&fields=id,modifiedTime`
@@ -130,7 +130,9 @@ type Decision =
   | { kind: "delete-remote"; snippetId: string; driveFileId: string };
 
 export async function syncWithDrive(): Promise<SyncResult> {
-  if (!getAccessToken()) throw new SyncError("Not signed in to Google Drive.");
+  if (!(await ensureAccessToken())) {
+    throw new SyncError("Not signed in to Google Drive.");
+  }
 
   const local = await getAllSnippets();
   const manifest: SyncManifest =

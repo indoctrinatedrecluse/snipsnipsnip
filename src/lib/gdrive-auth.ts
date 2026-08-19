@@ -1,15 +1,33 @@
 /**
- * Google Drive authentication via Google Identity Services (GIS).
+ * Google Drive authentication.
  *
- * Uses a client-side OAuth token flow — no backend required. Tokens are
- * persisted to localStorage (with expiry) so reloads can reuse them until
- * they expire, at which point a silent refresh is attempted.
+ * Two flows, selected at runtime:
+ * - **Desktop (Tauri)**: the Rust backend opens the system browser for the
+ *   Google consent screen, captures the loopback redirect, and exchanges the
+ *   PKCE code — returning tokens + the user profile. Refresh tokens are used
+ *   for silent re-auth after the 1h access token expires.
+ * - **Browser**: Google Identity Services (GIS) token client.
+ *
+ * Tokens are persisted to localStorage so reloads reuse them until expiry.
  */
 
-export const GDRIVE_SCOPES = "https://www.googleapis.com/auth/drive.appdata";
+import { invoke } from "@tauri-apps/api/core";
+
+export const GDRIVE_SCOPES =
+  "openid email profile https://www.googleapis.com/auth/drive.appdata";
 
 const GSI_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 const TOKEN_STORAGE_KEY = "snippetvault-gdrive-token";
+const REFRESH_STORAGE_KEY = "snippetvault-gdrive-refresh";
+const USER_STORAGE_KEY = "snippetvault-gdrive-user";
+const USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo";
+
+export interface UserInfo {
+  sub?: string;
+  name?: string;
+  email?: string;
+  picture?: string;
+}
 
 interface TokenResponse {
   access_token: string;
@@ -48,6 +66,15 @@ declare global {
   }
 }
 
+/** Detects whether the app is running inside the Tauri (desktop) shell. */
+export function isTauriRuntime(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window &&
+    typeof invoke === "function"
+  );
+}
+
 /** Reads the OAuth client id from the environment (VITE_GOOGLE_CLIENT_ID). */
 export function getClientId(): string | null {
   return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || null;
@@ -57,6 +84,7 @@ let scriptPromise: Promise<void> | null = null;
 let tokenClient: TokenClient | null = null;
 let accessToken: string | null = null;
 let tokenExpiry = 0;
+let refreshToken: string | null = null;
 
 function loadGsiScript(): Promise<void> {
   if (scriptPromise) return scriptPromise;
@@ -78,14 +106,16 @@ function loadGsiScript(): Promise<void> {
 function loadStoredToken(): void {
   try {
     const raw = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as { token: string; expiry: number };
-    if (parsed.expiry > Date.now()) {
-      accessToken = parsed.token;
-      tokenExpiry = parsed.expiry;
-    } else {
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { token: string; expiry: number };
+      if (parsed.expiry > Date.now()) {
+        accessToken = parsed.token;
+        tokenExpiry = parsed.expiry;
+      } else {
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
     }
+    refreshToken = window.localStorage.getItem(REFRESH_STORAGE_KEY);
   } catch {
     // Corrupt storage — ignore and stay signed out.
   }
@@ -104,11 +134,22 @@ function persistToken(token: string, expiresIn: number): void {
   }
 }
 
+function persistRefreshToken(token: string): void {
+  refreshToken = token;
+  try {
+    window.localStorage.setItem(REFRESH_STORAGE_KEY, token);
+  } catch {
+    // Ignore.
+  }
+}
+
 function clearToken(): void {
   accessToken = null;
   tokenExpiry = 0;
+  refreshToken = null;
   try {
     window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    window.localStorage.removeItem(REFRESH_STORAGE_KEY);
   } catch {
     // Ignore.
   }
@@ -151,7 +192,6 @@ function handleTokenResponse(response: TokenResponse): void {
   pendingReject = null;
 }
 
-
 /**
  * Returns a usable access token, or null when not signed in. A stored token
  * within its expiry window is reused.
@@ -163,12 +203,75 @@ export function getAccessToken(): string | null {
   return null;
 }
 
+/** True when an access or refresh token is available. */
+export function hasStoredAuth(): boolean {
+  loadStoredToken();
+  return accessToken !== null || refreshToken !== null;
+}
+
 /**
- * Requests an access token. Uses the silent flow when possible (the user
- * already granted access); otherwise Google shows the consent UI. Resolves
- * via whichever GIS callback fires (config or override).
+ * Ensures a usable access token exists, silently refreshing it when needed.
+ * Returns null when there is nothing to refresh or refresh fails.
+ */
+export async function ensureAccessToken(): Promise<string | null> {
+  const current = getAccessToken();
+  if (current) return current;
+
+  loadStoredToken();
+  if (!refreshToken) return null;
+
+  try {
+    if (isTauriRuntime()) {
+      const clientId = getClientId();
+      if (!clientId) return null;
+      const result = await invoke<{
+        access_token: string;
+        refresh_token?: string | null;
+        expires_in: number;
+      }>("drive_refresh", { refreshToken, clientId });
+      persistToken(result.access_token, result.expires_in);
+      if (result.refresh_token) persistRefreshToken(result.refresh_token);
+      return result.access_token;
+    }
+    // Browser (GIS): attempt a silent re-auth using the existing session.
+    const response = await requestAccessToken();
+    return response.access_token;
+  } catch {
+    return null;
+  }
+}
+
+async function signInTauri(): Promise<TokenResponse> {
+  const clientId = getClientId();
+  if (!clientId) {
+    throw new Error(
+      "Google Drive sync is not configured. Set VITE_GOOGLE_CLIENT_ID and rebuild.",
+    );
+  }
+  const result = await invoke<{
+    access_token: string;
+    refresh_token?: string | null;
+    expires_in: number;
+  }>("drive_oauth", { clientId, scopes: GDRIVE_SCOPES });
+  persistToken(result.access_token, result.expires_in);
+  if (result.refresh_token) persistRefreshToken(result.refresh_token);
+  return {
+    access_token: result.access_token,
+    token_type: "Bearer",
+    expires_in: result.expires_in,
+    scope: GDRIVE_SCOPES,
+  };
+}
+
+/**
+ * Requests an access token. On desktop this opens the system browser for the
+ * Google consent screen; in the browser it uses the GIS popup (silent when the
+ * user has already granted access).
  */
 export async function requestAccessToken(): Promise<TokenResponse> {
+  if (isTauriRuntime()) {
+    return signInTauri();
+  }
   const client = await initTokenClient();
   return new Promise<TokenResponse>((resolve, reject) => {
     pendingResolve = resolve;
@@ -177,9 +280,52 @@ export async function requestAccessToken(): Promise<TokenResponse> {
   });
 }
 
-/** Revokes the current token and clears local auth state. */
+/**
+ * Fetches the signed-in user's profile and persists it locally.
+ * Returns null when the request fails.
+ */
+export async function fetchUserInfo(): Promise<UserInfo | null> {
+  const token = getAccessToken();
+  if (!token) return null;
+  try {
+    let info: UserInfo;
+    if (isTauriRuntime()) {
+      info = await invoke<UserInfo>("drive_userinfo", { accessToken: token });
+    } else {
+      const response = await fetch(USERINFO_ENDPOINT, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return null;
+      info = (await response.json()) as UserInfo;
+    }
+    persistUserInfo(info);
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the last known user profile, if any. */
+export function getStoredUserInfo(): UserInfo | null {
+  try {
+    const raw = window.localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as UserInfo) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistUserInfo(info: UserInfo): void {
+  try {
+    window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(info));
+  } catch {
+    // Ignore.
+  }
+}
+
+/** Revokes the current token and clears all local auth state. */
 export async function signOutFromGoogle(): Promise<void> {
-  if (accessToken) {
+  if (accessToken && !isTauriRuntime()) {
     try {
       await loadGsiScript();
       window.google?.accounts?.oauth2.revoke(accessToken, () => {});
@@ -188,4 +334,9 @@ export async function signOutFromGoogle(): Promise<void> {
     }
   }
   clearToken();
+  try {
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+  } catch {
+    // Ignore.
+  }
 }
