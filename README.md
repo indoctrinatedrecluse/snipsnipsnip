@@ -121,7 +121,11 @@ writes its own hidden app folder in your Drive, never your personal files.
 - [x] **Phase 1** — Frontend & editor (snippet list, search, editing, copy)
 - [x] **Phase 2** — Highlighting engine (Shiki) & storage (IndexedDB + Google Drive sync)
 
-**Planned next:** tags editing, snippet import/export, and conflict-resolution refinements.
+**Planned next:**
+- Tags editing, snippet import/export, and conflict-resolution refinements
+- Desktop packaging — wrap the app in a lightweight shell (Tauri is the leading
+  candidate: it uses the OS's own WebView2 on Windows, so the resulting
+  standalone `.exe` is tiny) and ship a distributable installer
 
 ---
 
