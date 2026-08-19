@@ -36,6 +36,7 @@ SnippetVault is built for **speed** — search, highlight, and copy in milliseco
 | [Zustand](https://zustand-demo.pmnd.rs/) | Simple, performant global state management |
 | [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) | Offline-first local storage for instant snippet access |
 | [Google Drive API](https://developers.google.com/drive/api) | Seamless, secure cloud persistence of your snippet library |
+| [Tauri](https://tauri.app/) | Lightweight desktop shell (uses the OS's own WebView2 on Windows) |
 
 ---
 
@@ -76,6 +77,8 @@ npm run dev    # start the Vite dev server
 | `npm run build` | Type-check and produce an optimized production build in `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run test` | Run the Vitest test suite |
+| `npm run tauri:dev` | Run the desktop app in development (Vite + WebView2) |
+| `npm run tauri:build` | Build the standalone desktop app (exe + NSIS installer in `src-tauri/target/release/`) |
 
 ### ☁️ Enabling Google Drive Sync
 
@@ -123,9 +126,8 @@ writes its own hidden app folder in your Drive, never your personal files.
 
 **Planned next:**
 - Tags editing, snippet import/export, and conflict-resolution refinements
-- Desktop packaging — wrap the app in a lightweight shell (Tauri is the leading
-  candidate: it uses the OS's own WebView2 on Windows, so the resulting
-  standalone `.exe` is tiny) and ship a distributable installer
+- Desktop packaging — the app runs in a Tauri shell (using the OS's own
+  WebView2 on Windows); polish the installer and add auto-updates
 
 ---
 

@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { CodeEditor } from "@/components/editor/CodeEditor";
+import { FindReplaceBar } from "@/components/editor/FindReplaceBar";
 import { HighlightedCode } from "@/components/editor/HighlightedCode";
 import { Toolbar, type EditorMode } from "@/components/layout/Toolbar";
 import { Input } from "@/components/ui/input";
+import { useFindReplace } from "@/hooks/useFindReplace";
+import { useHotkeys } from "@/hooks/useHotkeys";
 import { formatRelativeTime } from "@/hooks/useRelativeTime";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSnippetStore } from "@/stores/snippet-store";
@@ -22,7 +25,19 @@ export function SnippetDetail() {
     setMode("edit");
   }, [snippet?.id]);
 
+  const find = useFindReplace(snippet?.code ?? "");
+
+  useHotkeys({
+    "ctrl+f": (event) => {
+      event.preventDefault();
+      find.openFind();
+    },
+  });
+
   if (!snippet) return null;
+
+  const applyCodeChange = (code: string) =>
+    updateSnippet(snippet.id, { code });
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -45,26 +60,48 @@ export function SnippetDetail() {
       <Toolbar snippetId={snippet.id} mode={mode} onModeChange={setMode} />
 
       <div className="min-h-0 flex-1 p-4">
-        {mode === "edit" ? (
-          <div className="size-full overflow-hidden rounded-lg border bg-background">
-            <CodeEditor
-              value={snippet.code}
-              onChange={(code) => updateSnippet(snippet.id, { code })}
-              language={snippet.language}
-              theme={theme}
-              placeholder="Start typing your code..."
+        <div className="flex size-full flex-col overflow-hidden rounded-lg border bg-background">
+          {find.open && (
+            <FindReplaceBar
+              findQuery={find.findQuery}
+              onFindQueryChange={find.setFindQuery}
+              replaceQuery={find.replaceQuery}
+              onReplaceQueryChange={find.setReplaceQuery}
+              useRegex={find.useRegex}
+              onUseRegexChange={find.setUseRegex}
+              caseSensitive={find.caseSensitive}
+              onCaseSensitiveChange={find.setCaseSensitive}
+              matchCount={find.matches.length}
+              matchIndex={find.matchIndex}
+              regexError={find.regexError}
+              onNext={find.next}
+              onPrev={find.prev}
+              onReplace={() => find.replace(applyCodeChange)}
+              onReplaceAll={() => find.replaceAll(applyCodeChange)}
+              onClose={() => find.setOpen(false)}
             />
+          )}
+          <div className="min-h-0 flex-1">
+            {mode === "edit" ? (
+              <CodeEditor
+                value={snippet.code}
+                onChange={applyCodeChange}
+                language={snippet.language}
+                theme={theme}
+                placeholder="Start typing your code..."
+                matches={find.matches}
+                currentMatchIndex={find.matchIndex}
+              />
+            ) : (
+              <HighlightedCode
+                code={snippet.code}
+                language={snippet.language}
+                theme={theme}
+                className="size-full p-4"
+              />
+            )}
           </div>
-        ) : (
-          <div className="size-full overflow-hidden rounded-lg border bg-background">
-            <HighlightedCode
-              code={snippet.code}
-              language={snippet.language}
-              theme={theme}
-              className="size-full p-4"
-            />
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
