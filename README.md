@@ -123,6 +123,8 @@ writes its own hidden app folder in your Drive, never your personal files.
 - [x] **Phase 0** — Project scaffolding, styling system, scripts & docs
 - [x] **Phase 1** — Frontend & editor (snippet list, search, editing, copy)
 - [x] **Phase 2** — Highlighting engine (Shiki) & storage (IndexedDB + Google Drive sync)
+- [x] **Full-text search** — fuzzy, relevance-ranked search (Fuse.js) across title,
+      tags, description & code, with in-list match highlighting
 
 **Planned next:**
 - Tags editing, snippet import/export, and conflict-resolution refinements

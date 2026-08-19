@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
+import { searchSnippets } from "@/lib/search";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSnippetStore } from "@/stores/snippet-store";
 
@@ -33,22 +34,10 @@ export function Sidebar({ onNew }: SidebarProps) {
   const theme = useSettingsStore((store) => store.theme);
   const toggleTheme = useSettingsStore((store) => store.toggleTheme);
 
-  const filteredSnippets = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return snippets
-      .filter((snippet) =>
-        languageFilter ? snippet.language === languageFilter : true,
-      )
-      .filter((snippet) =>
-        query
-          ? snippet.title.toLowerCase().includes(query) ||
-            snippet.description.toLowerCase().includes(query) ||
-            snippet.code.toLowerCase().includes(query) ||
-            snippet.tags.some((tag) => tag.toLowerCase().includes(query))
-          : true,
-      )
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [snippets, searchQuery, languageFilter]);
+  const searchResults = useMemo(
+    () => searchSnippets(snippets, searchQuery, languageFilter),
+    [snippets, searchQuery, languageFilter],
+  );
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -111,7 +100,7 @@ export function Sidebar({ onNew }: SidebarProps) {
 
       <ScrollArea className="min-h-0 flex-1 px-2 pb-2">
         <SnippetList
-          snippets={filteredSnippets}
+          results={searchResults}
           activeId={activeId}
           onSelect={setActive}
         />
