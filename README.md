@@ -84,17 +84,46 @@ npm run dev    # start the Vite dev server
 
 Snippets are always stored locally (IndexedDB, offline-first). Drive sync is
 opt-in and uses the narrow `drive.appdata` scope — the app only reads and
-writes its own hidden app folder in your Drive, never your personal files.
+writes its own hidden **app data folder** in your Drive, never your personal
+files. Sync is automatic: it runs after edits (debounced), when the app starts
+(if signed in), and when the connection returns. Conflicts are resolved
+last-write-wins by timestamp.
 
-1. Create an OAuth client id at <https://console.cloud.google.com/apis/credentials>
-   (Application type: **Web application**).
-2. Add `http://localhost:5173` to **Authorized JavaScript origins**.
-3. Enable the **Google Drive API** for your project.
-4. Copy `.env.example` to `.env` and set `VITE_GOOGLE_CLIENT_ID`.
-5. Restart the app — you'll see a **Sync** control in the sidebar.
+> Until configured, the app works fully offline with a **"Drive sync not
+> configured"** indicator in the sidebar.
 
-> Until configured, the app works fully offline with a "sync not configured"
-> indicator in the sidebar.
+**One-time setup (Google Cloud Console):**
+
+1. Go to <https://console.cloud.google.com/> and create a new project (or
+   select an existing one) — for example *SnippetVault*.
+2. **Enable the Google Drive API**: *APIs & Services → Library*, search for
+   *Google Drive API*, open it, and click **Enable**.
+3. **Configure the OAuth consent screen**: *APIs & Services → OAuth consent
+   screen*, choose **External** (or *Internal* if you use a Google Workspace
+   account), and fill in:
+   - *App name*: `SnippetVault`
+   - *User support email* and *Developer contact information*: your email
+   - *Scopes*: leave as-is (the app requests its own scope at runtime)
+   - *Test users*: not required for your own account; add your email if
+     Google prompts for it
+   - Click **Save and continue** through the remaining steps.
+4. **Create an OAuth client ID**: *APIs & Services → Credentials → Create
+   credentials → OAuth client ID*, and choose **Application type: Web
+   application**. Under **Authorized JavaScript origins** add:
+   - `http://localhost:5173` (dev server)
+   - `http://localhost:4173` (production preview / `run.ps1`)
+   Click **Create**, then copy the **client ID** (looks like
+   `xxxx.apps.googleusercontent.com`).
+5. **Wire it into the app**: copy `.env.example` to `.env` in the project
+   root and set `VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com`.
+6. **Restart** the dev server (`npm run dev`) — Vite reads environment
+   variables at startup.
+7. Open the app, click the **Sync** control in the sidebar footer, and choose
+   **Sign in with Google**. Approve the prompt, and your snippets will sync to
+   your Drive's private app data folder.
+
+> **Note:** Drive sync is currently configured for the **web** app origins
+> above. A future step will extend the setup to the packaged Tauri desktop app.
 
 ---
 
@@ -127,6 +156,8 @@ writes its own hidden app folder in your Drive, never your personal files.
       tags, description & code, with in-list match highlighting
 - [x] **Tags & import/export** — badge-style tag editor on snippets, JSON export
       and import (versioned payload, last-write-wins merge)
+- [x] **About dialog** — author info and profile links (encoded at rest, opened
+      only at runtime)
 
 **Planned next:**
 - Live Google Drive sync testing (needs a real OAuth client ID)

@@ -1,6 +1,7 @@
-import { useMemo, useRef, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   DownloadIcon,
+  InfoIcon,
   MoonIcon,
   MoreVerticalIcon,
   PlusIcon,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AboutDialog } from "@/components/layout/AboutDialog";
 import { SnippetList } from "@/components/snippets/SnippetList";
 import { SyncStatus } from "@/components/layout/SyncStatus";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,7 @@ export function Sidebar({ onNew }: SidebarProps) {
   const theme = useSettingsStore((store) => store.theme);
   const toggleTheme = useSettingsStore((store) => store.toggleTheme);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const searchResults = useMemo(
     () => searchSnippets(snippets, searchQuery, languageFilter),
@@ -143,6 +146,10 @@ export function Sidebar({ onNew }: SidebarProps) {
                 <UploadIcon />
                 Import JSON…
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAboutOpen(true)}>
+                <InfoIcon />
+                About SnippetVault
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <input
@@ -194,6 +201,8 @@ export function Sidebar({ onNew }: SidebarProps) {
       </ScrollArea>
 
       <SyncStatus />
+
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </aside>
   );
 }

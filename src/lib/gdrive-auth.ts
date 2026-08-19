@@ -126,17 +126,31 @@ async function initTokenClient(): Promise<TokenClient> {
     tokenClient = window.google!.accounts!.oauth2.initTokenClient({
       client_id: clientId,
       scope: GDRIVE_SCOPES,
-      callback: (response) => {
-        if (response.error) {
-          clearToken();
-        } else {
-          persistToken(response.access_token, response.expires_in);
-        }
-      },
+      callback: handleTokenResponse,
     });
   }
   return tokenClient;
 }
+
+let pendingResolve: ((response: TokenResponse) => void) | null = null;
+let pendingReject: ((error: Error) => void) | null = null;
+
+function handleTokenResponse(response: TokenResponse): void {
+  if (response.error) {
+    clearToken();
+    pendingReject?.(
+      new Error(
+        response.error_description ?? `Sign-in failed: ${response.error}`,
+      ),
+    );
+  } else {
+    persistToken(response.access_token, response.expires_in);
+    pendingResolve?.(response);
+  }
+  pendingResolve = null;
+  pendingReject = null;
+}
+
 
 /**
  * Returns a usable access token, or null when not signed in. A stored token
@@ -151,26 +165,15 @@ export function getAccessToken(): string | null {
 
 /**
  * Requests an access token. Uses the silent flow when possible (the user
- * already granted access); otherwise Google shows the consent UI.
+ * already granted access); otherwise Google shows the consent UI. Resolves
+ * via whichever GIS callback fires (config or override).
  */
 export async function requestAccessToken(): Promise<TokenResponse> {
   const client = await initTokenClient();
-  return new Promise((resolve, reject) => {
-    client.requestAccessToken({
-      prompt: "",
-      callback: (response) => {
-        if (response.error) {
-          reject(
-            new Error(
-              response.error_description ??
-                `Sign-in failed: ${response.error}`,
-            ),
-          );
-        } else {
-          resolve(response);
-        }
-      },
-    });
+  return new Promise<TokenResponse>((resolve, reject) => {
+    pendingResolve = resolve;
+    pendingReject = reject;
+    client.requestAccessToken({ prompt: "" });
   });
 }
 
