@@ -96,6 +96,28 @@ describe("snippet store", () => {
         ?.isFavorite,
     ).toBe(false);
   });
+
+  it("imports snippets and keeps the newer version of clashes", () => {
+    const existing = createSnippet({ title: "Old", code: "v1" });
+    useSnippetStore.setState({ snippets: [existing] });
+
+    const newer = { ...existing, updatedAt: existing.updatedAt + 1000, code: "v2" };
+    const older = {
+      ...existing,
+      updatedAt: existing.updatedAt - 1000,
+      code: "v1-older",
+    };
+    const brandNew = createSnippet({ title: "New", code: "n" });
+
+    useSnippetStore.getState().importSnippets([newer, older, brandNew]);
+
+    const byId = new Map(
+      useSnippetStore.getState().snippets.map((s) => [s.id, s]),
+    );
+    expect(byId.size).toBe(2);
+    expect(byId.get(existing.id)?.code).toBe("v2");
+    expect(byId.has(brandNew.id)).toBe(true);
+  });
 });
 
 describe("createSnippet", () => {

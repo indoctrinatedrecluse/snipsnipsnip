@@ -4,6 +4,7 @@ import { CodeEditor } from "@/components/editor/CodeEditor";
 import { FindReplaceBar } from "@/components/editor/FindReplaceBar";
 import { HighlightedCode } from "@/components/editor/HighlightedCode";
 import { Toolbar, type EditorMode } from "@/components/layout/Toolbar";
+import { TagInput } from "@/components/snippets/TagInput";
 import { Input } from "@/components/ui/input";
 import { useFindReplace } from "@/hooks/useFindReplace";
 import { useHotkeys } from "@/hooks/useHotkeys";
@@ -41,7 +42,7 @@ export function SnippetDetail() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="border-b px-4 pt-4 pb-2">
+      <div className="space-y-2 border-b px-4 pt-4 pb-3">
         <Input
           value={snippet.title}
           onChange={(event) =>
@@ -51,9 +52,22 @@ export function SnippetDetail() {
           aria-label="Snippet title"
           className="h-9 border-none bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
         />
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          Updated {formatRelativeTime(snippet.updatedAt)} ·{" "}
-          {snippet.tags.length > 0 ? snippet.tags.join(", ") : "No tags"}
+        <Input
+          value={snippet.description}
+          onChange={(event) =>
+            updateSnippet(snippet.id, { description: event.target.value })
+          }
+          placeholder="Add a description…"
+          aria-label="Snippet description"
+          className="h-7 border-none bg-transparent px-0 text-sm text-muted-foreground shadow-none focus-visible:ring-0"
+        />
+        <TagInput
+          value={snippet.tags}
+          onChange={(tags) => updateSnippet(snippet.id, { tags })}
+          className="w-full sm:max-w-md"
+        />
+        <p className="text-xs text-muted-foreground">
+          Updated {formatRelativeTime(snippet.updatedAt)}
         </p>
       </div>
 

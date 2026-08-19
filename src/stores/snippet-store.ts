@@ -16,6 +16,8 @@ interface SnippetState {
   deleteSnippet: (id: string) => void;
   duplicateSnippet: (id: string) => string | null;
   toggleFavorite: (id: string) => void;
+  /** Merges imported snippets: adds new ones, keeps the newer of clashes. */
+  importSnippets: (imported: Snippet[]) => void;
   setActive: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
   setLanguageFilter: (language: string | null) => void;
@@ -72,6 +74,21 @@ export const useSnippetStore = create<SnippetState>()((set, get) => ({
           : snippet,
       ),
     }));
+  },
+
+  importSnippets: (imported) => {
+    set((state) => {
+      const byId = new Map(
+        state.snippets.map((snippet) => [snippet.id, snippet]),
+      );
+      for (const snippet of imported) {
+        const existing = byId.get(snippet.id);
+        if (!existing || snippet.updatedAt > existing.updatedAt) {
+          byId.set(snippet.id, snippet);
+        }
+      }
+      return { snippets: [...byId.values()] };
+    });
   },
 
   setActive: (activeId) => set({ activeId }),

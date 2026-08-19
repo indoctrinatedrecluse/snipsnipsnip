@@ -125,11 +125,13 @@ writes its own hidden app folder in your Drive, never your personal files.
 - [x] **Phase 2** — Highlighting engine (Shiki) & storage (IndexedDB + Google Drive sync)
 - [x] **Full-text search** — fuzzy, relevance-ranked search (Fuse.js) across title,
       tags, description & code, with in-list match highlighting
+- [x] **Tags & import/export** — badge-style tag editor on snippets, JSON export
+      and import (versioned payload, last-write-wins merge)
 
 **Planned next:**
-- Tags editing, snippet import/export, and conflict-resolution refinements
-- Desktop packaging — the app runs in a Tauri shell (using the OS's own
-  WebView2 on Windows); polish the installer and add auto-updates
+- Live Google Drive sync testing (needs a real OAuth client ID)
+- Installer polish and auto-updates for the Tauri desktop app
+- Conflict-resolution refinements
 
 ---
 

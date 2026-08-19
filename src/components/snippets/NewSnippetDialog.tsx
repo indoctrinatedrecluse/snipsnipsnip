@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { TagInput } from "@/components/snippets/TagInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,11 +38,13 @@ export function NewSnippetDialog({
 
   const [title, setTitle] = useState("Untitled snippet");
   const [language, setLanguage] = useState("plaintext");
+  const [tags, setTags] = useState<string[]>([]);
   const [code, setCode] = useState("");
 
   const reset = () => {
     setTitle("Untitled snippet");
     setLanguage("plaintext");
+    setTags([]);
     setCode("");
   };
 
@@ -51,7 +54,7 @@ export function NewSnippetDialog({
   };
 
   const handleCreate = () => {
-    const id = addSnippet({ title, language, code });
+    const id = addSnippet({ title, language, tags, code });
     setActive(id);
     reset();
     onOpenChange(false);
@@ -104,6 +107,14 @@ export function NewSnippetDialog({
               onChange={(event) => setCode(event.target.value)}
               placeholder="Paste some starter code..."
               className="min-h-24 font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-tags">Tags</Label>
+            <TagInput
+              value={tags}
+              onChange={setTags}
+              placeholder="react, hooks, demo…"
             />
           </div>
         </div>
