@@ -133,6 +133,21 @@ sidebar's sync control.
 
 ---
 
+## 🚀 Releasing a desktop build
+
+Pushing a version tag triggers the [release workflow](.github/workflows/release.yml),
+which builds the app on a clean Windows runner and attaches the standalone
+exe + NSIS installer to a GitHub Release (as a draft):
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Then open the **Releases** page, review the draft, and publish it.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -164,6 +179,9 @@ sidebar's sync control.
       and import (versioned payload, last-write-wins merge)
 - [x] **About dialog** — author info and profile links (encoded at rest, opened
       only at runtime)
+- [x] **Editor power tools** — auto-closing pairs, auto-indent, multi-line
+      indent/outdent, duplicate & move lines, comment toggle (Ctrl+/), go to
+      line (Ctrl+G), zoom (Ctrl+=/−/0), and a live status bar (Ln/Col + counts)
 
 **Planned next:**
 - Live Google Drive sync testing (needs a real OAuth client ID)
