@@ -50,7 +50,7 @@ jobs:
           releaseDraft: false
           prerelease: false
 
-      - name: Package Portable Executable & Zip
+      - name: Package Portable Zip
         shell: pwsh
         run: |
           $Tag = "${{ github.ref_name }}"
@@ -64,22 +64,18 @@ jobs:
 
           $PortableDir = "SnippetVault-portable"
           $ZipName = "SnippetVault-$Tag-windows-portable.zip"
-          $StandaloneExe = "SnippetVault-$Tag-windows-x64.exe"
 
           New-Item -ItemType Directory -Path $PortableDir -Force | Out-Null
           Copy-Item -Path $ExePath -Destination "$PortableDir/SnippetVault.exe" -Force
           Compress-Archive -Path "$PortableDir/*" -DestinationPath $ZipName -Force
-          Copy-Item -Path $ExePath -Destination $StandaloneExe -Force
 
           Write-Host "Created portable archive: $ZipName"
-          Write-Host "Created standalone executable: $StandaloneExe"
 
-      - name: Upload Portable Zip and Standalone Executable
+      - name: Upload Portable Zip to Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $Tag = "${{ github.ref_name }}"
           $ZipName = "SnippetVault-$Tag-windows-portable.zip"
-          $StandaloneExe = "SnippetVault-$Tag-windows-x64.exe"
-          gh release upload $Tag $ZipName $StandaloneExe --clobber
+          gh release upload $Tag $ZipName --clobber
