@@ -1,29 +1,31 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
+import { basicSetup, EditorView } from "codemirror";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { keymap } from "@codemirror/view";
+import { defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { oneDark } from "@codemirror/theme-one-dark";
+
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
+import { rust } from "@codemirror/lang-rust";
+import { cpp } from "@codemirror/lang-cpp";
+import { sql } from "@codemirror/lang-sql";
+import { yaml } from "@codemirror/lang-yaml";
+
+import { languages } from "@codemirror/language-data";
+import { LanguageDescription } from "@codemirror/language";
 
 import { GoToLineDialog } from "@/components/editor/GoToLineDialog";
-import { useHighlight } from "@/hooks/useHighlight";
-import {
-  computeLineStarts,
-  duplicateLines,
-  goToLine,
-  handleAutoPair,
-  handleBackspace,
-  handleEnter,
-  indentSelection,
-  insertText,
-  isAutoPairChar,
-  lineIndexAt,
-  moveLines,
-  toggleComment,
-  type EditPosition,
-} from "@/lib/editor-commands";
 import type { FindMatch } from "@/lib/find-replace";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { AppTheme } from "@/types/app";
@@ -34,326 +36,335 @@ interface CodeEditorProps {
   language: string;
   theme: AppTheme;
   placeholder?: string;
-  /** Find & replace matches to highlight in the editor. */
   matches?: FindMatch[];
-  /** Index into `matches` for the current match (stronger highlight). */
   currentMatchIndex?: number;
 }
 
-// Keep these in sync with the layout classes used below.
-const PAD_X = 56; // pl-14
-const PAD_Y = 16; // py-4
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 24;
-const DEFAULT_FONT_SIZE = 14;
 
 const MONO_FONT_STACK =
   "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
 
-function measureCharWidth(fontSize: number): number {
-  try {
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    if (!context) return fontSize * 0.6;
-    context.font = `${fontSize}px ${MONO_FONT_STACK}`;
-    return context.measureText("0").width;
-  } catch {
-    return fontSize * 0.6;
+function getFastLanguageExtension(language: string): Extension | null {
+  switch (language.toLowerCase()) {
+    case "javascript":
+    case "jsx":
+      return javascript({ jsx: true });
+    case "typescript":
+    case "tsx":
+      return javascript({ typescript: true, jsx: true });
+    case "python":
+      return python();
+    case "html":
+    case "xml":
+      return html();
+    case "css":
+      return css();
+    case "json":
+      return json();
+    case "markdown":
+      return markdown();
+    case "rust":
+      return rust();
+    case "c":
+    case "cpp":
+      return cpp();
+    case "sql":
+      return sql();
+    case "yaml":
+      return yaml();
+    case "plaintext":
+    case "text":
+    case "txt":
+      return [];
+    default:
+      return null;
   }
 }
 
-/**
- * A lightweight syntax-highlighted editor: a transparent <textarea> is layered
- * over a <pre> containing Shiki-highlighted HTML, with a line-number gutter,
- * find-match highlights, auto-pairing, auto-indent, and common editing
- * shortcuts. Typing stays native and fast; highlighting stays visually in
- * sync via debounced re-highlighting.
- */
+const CM_ALIASES: Record<string, string> = {
+  proto: "protobuf",
+  protobuf: "protobuf",
+  bash: "shell",
+  sh: "shell",
+  zsh: "shell",
+  powershell: "powershell",
+  solidity: "cpp",
+  prisma: "graphql",
+  astro: "html",
+  svelte: "html",
+};
+
+function getCodeMirrorDescription(language: string): LanguageDescription | null {
+  const normalized = CM_ALIASES[language.toLowerCase()] ?? language;
+  return LanguageDescription.matchLanguageName(languages, normalized, true);
+}
+
+function getInitialLanguageExtension(language: string): Extension {
+  const fast = getFastLanguageExtension(language);
+  if (fast !== null) return fast;
+  const desc = getCodeMirrorDescription(language);
+  return desc?.support ?? [];
+}
+
+const baseTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    backgroundColor: "transparent",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
+    fontFamily: MONO_FONT_STACK,
+  },
+  ".cm-content": {
+    fontFamily: MONO_FONT_STACK,
+    caretColor: "currentColor",
+    padding: "16px 0",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    borderRight: "1px solid var(--border, #e5e7eb)",
+    color: "var(--muted-foreground, #9ca3af)",
+    fontFamily: MONO_FONT_STACK,
+    paddingRight: "8px",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "rgba(128, 128, 128, 0.15)",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "rgba(128, 128, 128, 0.07)",
+  },
+  "&.cm-focused .cm-cursor": {
+    borderLeftColor: "currentColor",
+  },
+  "&.cm-focused .cm-selectionBackground, ::selection": {
+    backgroundColor: "rgba(59, 130, 246, 0.25)",
+  },
+});
+
+function getFontSizeExtension(fontSize: number) {
+  return EditorView.theme({
+    "&": {
+      fontSize: `${fontSize}px`,
+    },
+    ".cm-line": {
+      lineHeight: "1.5",
+    },
+  });
+}
+
 export function CodeEditor({
   value,
   onChange,
   language,
   theme,
-  placeholder,
   matches,
   currentMatchIndex,
 }: CodeEditorProps) {
-  const html = useHighlight(value, language, theme);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   const fontSize = useSettingsStore((store) => store.editorFontSize);
   const setEditorFontSize = useSettingsStore(
     (store) => store.setEditorFontSize,
   );
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const matchLayerRef = useRef<HTMLDivElement>(null);
-
   const [goToOpen, setGoToOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
 
-  const lineHeight = Math.round(fontSize * 1.5);
-  const charWidth = useMemo(() => measureCharWidth(fontSize), [fontSize]);
-
-  // Shiki renders exactly one <span class="line"> per textarea line when the
-  // code is highlighted as-is, so the gutter count always matches.
   const lineCount = value.split("\n").length;
   const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
   const charCount = value.length;
 
-  const syncScroll = useCallback(() => {
-    const textarea = textareaRef.current;
-    const pre = preRef.current;
-    const gutter = gutterRef.current;
-    const matchLayer = matchLayerRef.current;
-    if (!textarea || !pre) return;
-    const transform = `translate(${-textarea.scrollLeft}px, ${-textarea.scrollTop}px)`;
-    pre.style.transform = transform;
-    if (matchLayer) matchLayer.style.transform = transform;
-    if (gutter) {
-      gutter.style.transform = `translateY(${-textarea.scrollTop}px)`;
-    }
+  const langCompartment = useRef(new Compartment()).current;
+  const themeCompartment = useRef(new Compartment()).current;
+  const fontCompartment = useRef(new Compartment()).current;
+
+  // Initialize CodeMirror 6 view once
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const startState = EditorState.create({
+      doc: value,
+      extensions: [
+        basicSetup,
+        baseTheme,
+        keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
+        EditorView.lineWrapping,
+        EditorView.contentAttributes.of({
+          "aria-label": "Code editor",
+          role: "textbox",
+          spellcheck: "false",
+        }),
+        langCompartment.of(getInitialLanguageExtension(language)),
+        themeCompartment.of(theme === "dark" ? oneDark : []),
+        fontCompartment.of(getFontSizeExtension(fontSize)),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            const next = update.state.doc.toString();
+            onChangeRef.current(next);
+          }
+          if (update.selectionSet || update.docChanged) {
+            const pos = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(pos);
+            setCursor({ line: line.number, col: pos - line.from + 1 });
+          }
+        }),
+      ],
+    });
+
+    const view = new EditorView({
+      state: startState,
+      parent: containerRef.current,
+    });
+    viewRef.current = view;
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateCursor = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const lineStarts = computeLineStarts(value);
-    const position = textarea.selectionStart;
-    const line = lineIndexAt(lineStarts, position) + 1;
-    const col = position - lineStarts[line - 1] + 1;
-    setCursor({ line, col });
+  // Sync external value changes into the editor
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const currentDoc = view.state.doc.toString();
+    if (currentDoc !== value) {
+      const currentSelection = view.state.selection;
+      view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: value },
+        selection: {
+          anchor: Math.min(currentSelection.main.anchor, value.length),
+          head: Math.min(currentSelection.main.head, value.length),
+        },
+      });
+    }
   }, [value]);
 
-  /** Applies a pure editing result and restores the caret. */
-  const applyEdit = useCallback(
-    (result: EditPosition) => {
-      onChange(result.value);
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        textarea.selectionStart = result.selectionStart;
-        textarea.selectionEnd = result.selectionEnd;
-        updateCursor();
+  // Sync language changes (fast synchronous core grammars + lazy dynamic loading from language-data)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const fast = getFastLanguageExtension(language);
+    if (fast !== null) {
+      view.dispatch({
+        effects: langCompartment.reconfigure(fast),
       });
-    },
-    [onChange, updateCursor],
-  );
+      return;
+    }
+
+    const desc = getCodeMirrorDescription(language);
+    if (!desc) {
+      view.dispatch({
+        effects: langCompartment.reconfigure([]),
+      });
+      return;
+    }
+
+    if (desc.support) {
+      view.dispatch({
+        effects: langCompartment.reconfigure(desc.support),
+      });
+      return;
+    }
+
+    let cancelled = false;
+    desc
+      .load()
+      .then((support) => {
+        if (!cancelled && viewRef.current === view) {
+          view.dispatch({
+            effects: langCompartment.reconfigure(support),
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn(`Failed to dynamically load grammar for ${language}:`, err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language, langCompartment]);
+
+  // Sync theme changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: themeCompartment.reconfigure(theme === "dark" ? oneDark : []),
+    });
+  }, [theme, themeCompartment]);
+
+  // Sync font size changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: fontCompartment.reconfigure(getFontSizeExtension(fontSize)),
+    });
+  }, [fontSize, fontCompartment]);
+
+  // Jump to active find & replace match
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || matches === undefined || currentMatchIndex === undefined) return;
+    const match = matches[currentMatchIndex];
+    if (match) {
+      view.dispatch({
+        selection: { anchor: match.start, head: match.end },
+        scrollIntoView: true,
+      });
+    }
+  }, [matches, currentMatchIndex]);
 
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      const textarea = event.currentTarget;
-      const edit: EditPosition = {
-        value,
-        selectionStart: textarea.selectionStart,
-        selectionEnd: textarea.selectionEnd,
-      };
-      const isComposing = event.nativeEvent.isComposing;
-
+    (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.ctrlKey || event.metaKey) {
         const key = event.key.toLowerCase();
-        if (key === "d" && event.shiftKey) {
-          event.preventDefault();
-          applyEdit(duplicateLines(edit));
-          return;
-        }
-        if (key === "/") {
-          event.preventDefault();
-          applyEdit(toggleComment(edit, language));
-          return;
-        }
         if (key === "g") {
           event.preventDefault();
           setGoToOpen(true);
-          return;
-        }
-        if (key === "=" || key === "+") {
+        } else if (key === "=" || key === "+") {
           event.preventDefault();
           setEditorFontSize(Math.min(MAX_FONT_SIZE, fontSize + 1));
-          return;
-        }
-        if (key === "-" || key === "_") {
+        } else if (key === "-") {
           event.preventDefault();
           setEditorFontSize(Math.max(MIN_FONT_SIZE, fontSize - 1));
-          return;
         }
-        if (key === "0") {
-          event.preventDefault();
-          setEditorFontSize(DEFAULT_FONT_SIZE);
-          return;
-        }
-        return;
-      }
-
-      if (event.altKey) {
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          applyEdit(moveLines(edit, -1));
-        } else if (event.key === "ArrowDown") {
-          event.preventDefault();
-          applyEdit(moveLines(edit, 1));
-        }
-        return;
-      }
-
-      if (event.shiftKey) {
-        if (event.key === "Tab") {
-          event.preventDefault();
-          applyEdit(indentSelection(edit, -1));
-        }
-        return;
-      }
-
-      if (isComposing) return;
-
-      switch (event.key) {
-        case "Tab":
-          event.preventDefault();
-          applyEdit(
-            edit.selectionStart === edit.selectionEnd
-              ? insertText(edit, "  ")
-              : indentSelection(edit, 1),
-          );
-          return;
-        case "Enter":
-          event.preventDefault();
-          applyEdit(handleEnter(edit));
-          return;
-        case "Backspace": {
-          const result = handleBackspace(edit);
-          if (result !== edit) {
-            event.preventDefault();
-            applyEdit(result);
-          }
-          return;
-        }
-        default:
-          if (event.key.length === 1 && isAutoPairChar(event.key)) {
-            event.preventDefault();
-            applyEdit(handleAutoPair(edit, event.key));
-          }
       }
     },
-    [value, applyEdit, language, fontSize, setEditorFontSize],
+    [fontSize, setEditorFontSize],
   );
 
-  // Scroll the current find-match into view and select it.
-  useEffect(() => {
-    if (currentMatchIndex === undefined || currentMatchIndex < 0) return;
-    const match = matches?.[currentMatchIndex];
-    const textarea = textareaRef.current;
-    if (!match || !textarea) return;
-
-    const targetTop =
-      PAD_Y +
-      match.line * lineHeight +
-      lineHeight / 2 -
-      textarea.clientHeight / 2;
-    const targetLeft =
-      PAD_X + match.col * charWidth + (match.len * charWidth) / 2 -
-      textarea.clientWidth / 2;
-
-    if (textarea.scrollTop !== targetTop) {
-      textarea.scrollTop = Math.max(0, targetTop);
-    }
-    if (textarea.scrollLeft !== targetLeft) {
-      textarea.scrollLeft = Math.max(0, targetLeft);
-    }
-    textarea.setSelectionRange(match.start, match.end);
-  }, [currentMatchIndex, matches, charWidth, lineHeight]);
-
-  const handleGoToLine = useCallback(
-    (lineNumber: number) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const result = goToLine(
-        {
-          value,
-          selectionStart: textarea.selectionStart,
-          selectionEnd: textarea.selectionEnd,
-        },
-        lineNumber,
-      );
-      applyEdit(result);
-      requestAnimationFrame(() => {
-        const targetTop =
-          PAD_Y + (lineNumber - 1) * lineHeight - textarea.clientHeight / 2;
-        textarea.scrollTop = Math.max(0, targetTop);
-      });
-    },
-    [value, applyEdit, lineHeight],
-  );
+  const handleGoToLine = useCallback((targetLine: number) => {
+    const view = viewRef.current;
+    if (!view) return;
+    const doc = view.state.doc;
+    const clampedLine = Math.min(Math.max(1, targetLine), doc.lines);
+    const lineInfo = doc.line(clampedLine);
+    view.dispatch({
+      selection: { anchor: lineInfo.from },
+      scrollIntoView: true,
+    });
+    view.focus();
+  }, []);
 
   return (
     <div
-      className="flex size-full flex-col overflow-hidden font-mono"
-      style={{ fontSize, lineHeight: `${lineHeight}px` }}
+      className="relative flex size-full flex-col overflow-hidden bg-background"
+      onKeyDown={handleKeyDown}
     >
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={gutterRef}
-          aria-hidden="true"
-          className="absolute inset-y-0 left-0 z-[6] w-14 overflow-hidden border-r border-border/60 bg-muted/30 pt-4"
-        >
-          {Array.from({ length: lineCount }, (_, index) => (
-            <div
-              key={index}
-              className="pr-2.5 text-right text-xs text-muted-foreground/50"
-            >
-              {index + 1}
-            </div>
-          ))}
-        </div>
-        <pre
-          ref={preRef}
-          aria-hidden="true"
-          className="absolute inset-0 m-0 overflow-visible whitespace-pre py-4 pr-4 pl-14 [tab-size:2]"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-        {matches && matches.length > 0 && (
-          <div
-            ref={matchLayerRef}
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-[5]"
-          >
-            {matches.map((match, index) => (
-              <div
-                key={index}
-                className={
-                  index === currentMatchIndex
-                    ? "absolute rounded-[3px] bg-amber-400/40 outline-2 outline-amber-400/70"
-                    : "absolute rounded-[3px] bg-amber-300/25"
-                }
-                style={{
-                  left: PAD_X + match.col * charWidth,
-                  top: PAD_Y + match.line * lineHeight,
-                  width: Math.max(match.len, 1) * charWidth,
-                  height: lineHeight,
-                }}
-              />
-            ))}
-          </div>
-        )}
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onScroll={syncScroll}
-          onKeyDown={handleKeyDown}
-          onSelect={updateCursor}
-          onClick={updateCursor}
-          onKeyUp={updateCursor}
-          placeholder={placeholder}
-          aria-label="Code editor"
-          spellCheck={false}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          wrap="off"
-          className="absolute inset-0 z-[6] size-full resize-none overflow-auto whitespace-pre bg-transparent py-4 pr-4 pl-14 text-transparent caret-foreground outline-none [tab-size:2]"
-          style={{ WebkitTextFillColor: "transparent" }}
-        />
-      </div>
+      <div
+        ref={containerRef}
+        className="relative min-h-0 flex-1 overflow-hidden"
+      />
 
       <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/30 px-3 py-1 font-sans text-xs text-muted-foreground">
         <span>

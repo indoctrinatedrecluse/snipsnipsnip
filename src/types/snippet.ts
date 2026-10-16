@@ -8,6 +8,9 @@ export interface Snippet {
   createdAt: number;
   updatedAt: number;
   isFavorite: boolean;
+  folder?: string;
+  /** Timestamp when moved to trash; undefined if active. */
+  deletedAt?: number;
   /** Timestamp of the last successful sync to Google Drive. */
   syncedAt?: number;
   /** Google Drive file id backing this snippet (when uploaded). */
@@ -27,6 +30,8 @@ export function createSnippet(draft: SnippetDraft): Snippet {
     language: draft.language ?? "plaintext",
     tags: draft.tags ?? [],
     isFavorite: draft.isFavorite ?? false,
+    folder: draft.folder,
+    deletedAt: draft.deletedAt,
     createdAt: now,
     updatedAt: now,
   };

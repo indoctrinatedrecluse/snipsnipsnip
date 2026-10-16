@@ -1,4 +1,4 @@
-import { StarIcon } from "lucide-react";
+import { FolderIcon, StarIcon, Trash2Icon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { HighlightedText } from "@/components/snippets/HighlightedText";
@@ -11,6 +11,7 @@ interface SnippetListProps {
   results: SnippetSearchResult[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  emptyMessage?: string;
 }
 
 type MatchIndices = ReadonlyArray<readonly [number, number]>;
@@ -30,11 +31,16 @@ function codePreview(code: string): string {
   return firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
 }
 
-export function SnippetList({ results, activeId, onSelect }: SnippetListProps) {
+export function SnippetList({
+  results,
+  activeId,
+  onSelect,
+  emptyMessage = "No snippets found. Try a different search, or create one with Ctrl+N.",
+}: SnippetListProps) {
   if (results.length === 0) {
     return (
       <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-        No snippets found. Try a different search, or create one with Ctrl+N.
+        {emptyMessage}
       </p>
     );
   }
@@ -44,6 +50,8 @@ export function SnippetList({ results, activeId, onSelect }: SnippetListProps) {
       {results.map(({ snippet, highlights }) => {
         const isActive = snippet.id === activeId;
         const preview = snippet.code ? codePreview(snippet.code) : "";
+        const isTrashed = Boolean(snippet.deletedAt);
+
         return (
           <li key={snippet.id}>
             <button
@@ -55,6 +63,7 @@ export function SnippetList({ results, activeId, onSelect }: SnippetListProps) {
                 isActive
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-accent/50",
+                isTrashed && "opacity-75",
               )}
             >
               <span className="flex w-full items-center gap-2">
@@ -66,6 +75,9 @@ export function SnippetList({ results, activeId, onSelect }: SnippetListProps) {
                 </span>
                 {snippet.isFavorite && (
                   <StarIcon className="size-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                )}
+                {isTrashed && (
+                  <Trash2Icon className="size-3 shrink-0 text-destructive" />
                 )}
               </span>
               {snippet.description && (
@@ -84,10 +96,16 @@ export function SnippetList({ results, activeId, onSelect }: SnippetListProps) {
                   />
                 </span>
               )}
-              <span className="flex w-full items-center gap-2">
+              <span className="flex w-full items-center gap-1.5 flex-wrap">
                 <Badge variant="secondary" className="font-mono text-[10px]">
                   {getLanguageLabel(snippet.language)}
                 </Badge>
+                {snippet.folder && (
+                  <span className="inline-flex items-center gap-1 rounded bg-muted/70 px-1.5 py-0 text-[10px] text-muted-foreground">
+                    <FolderIcon className="size-2.5" />
+                    {snippet.folder}
+                  </span>
+                )}
                 <span className="ml-auto text-xs text-muted-foreground">
                   {formatRelativeTime(snippet.updatedAt)}
                 </span>

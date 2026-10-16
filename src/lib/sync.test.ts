@@ -299,4 +299,55 @@ describe("syncWithDrive", () => {
     expect(result).toEqual({ pushed: 0, pulled: 0, deleted: 1 });
     expect(await getAllSnippets()).toHaveLength(0);
   });
+
+  it("preserves a local conflict backup when remote wins a conflict", async () => {
+    // 1. Initial sync to establish manifest
+    const baseSnippet = makeSnippet({
+      id: "snippet-conflict",
+      title: "Shared Code",
+      code: "version 1",
+      updatedAt: 1000,
+    });
+    const drive = setupDrive();
+    await putSnippet(baseSnippet);
+    await syncWithDrive();
+
+    // 2. Both sides edit the snippet
+    const [stored] = await getAllSnippets();
+    const baseTime = stored.syncedAt ?? Date.now();
+
+    // Local edit at baseTime + 10_000
+    await putSnippet({
+      ...stored,
+      code: "local divergent edit",
+      updatedAt: baseTime + 10_000,
+    });
+
+    // Remote edit at baseTime + 20_000 (newer than local)
+    const driveFileId = drive.list()[0].id;
+    drive.drive.set(driveFileId, {
+      id: driveFileId,
+      name: "snippet-conflict.json",
+      content: {
+        ...stored,
+        code: "remote winner edit",
+        updatedAt: baseTime + 20_000,
+      },
+      modifiedTime: new Date(baseTime + 20_000).toISOString(),
+    });
+
+    // 3. Sync again
+    const result = await syncWithDrive();
+    expect(result.pulled).toBe(1);
+
+    const all = await getAllSnippets();
+    // Remote version was pulled
+    const winner = all.find((s) => s.id === "snippet-conflict");
+    expect(winner?.code).toBe("remote winner edit");
+
+    // Local work was NOT lost — preserved as conflict backup
+    const backup = all.find((s) => s.title.includes("Conflict backup"));
+    expect(backup).toBeDefined();
+    expect(backup?.code).toBe("local divergent edit");
+  });
 });

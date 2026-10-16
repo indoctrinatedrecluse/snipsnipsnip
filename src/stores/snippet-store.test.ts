@@ -118,6 +118,57 @@ describe("snippet store", () => {
     expect(byId.get(existing.id)?.code).toBe("v2");
     expect(byId.has(brandNew.id)).toBe(true);
   });
+
+  it("moves a snippet to trash and clears active selection", () => {
+    const id = useSnippetStore.getState().addSnippet({ title: "To trash", code: "" });
+    useSnippetStore.getState().setActive(id);
+    useSnippetStore.getState().moveToTrash(id);
+
+    const snippet = useSnippetStore.getState().snippets.find((s) => s.id === id);
+    expect(snippet?.deletedAt).toBeDefined();
+    expect(typeof snippet?.deletedAt).toBe("number");
+    expect(useSnippetStore.getState().activeId).toBeNull();
+  });
+
+  it("restores a snippet from trash", () => {
+    const id = useSnippetStore.getState().addSnippet({ title: "Restorable", code: "" });
+    useSnippetStore.getState().moveToTrash(id);
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.deletedAt).toBeDefined();
+
+    useSnippetStore.getState().restoreSnippet(id);
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.deletedAt).toBeUndefined();
+  });
+
+  it("empties trash by removing trashed snippets permanently", () => {
+    const id1 = useSnippetStore.getState().addSnippet({ title: "Keep", code: "" });
+    const id2 = useSnippetStore.getState().addSnippet({ title: "Trash me", code: "" });
+    useSnippetStore.getState().moveToTrash(id2);
+
+    expect(useSnippetStore.getState().snippets).toHaveLength(2);
+    useSnippetStore.getState().emptyTrash();
+
+    const remaining = useSnippetStore.getState().snippets;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(id1);
+  });
+
+  it("manages folders and collection assignments", () => {
+    const id = useSnippetStore.getState().addSnippet({ title: "In React", code: "" });
+    useSnippetStore.getState().createFolder("React");
+    expect(useSnippetStore.getState().folders).toContain("React");
+
+    useSnippetStore.getState().setSnippetFolder(id, "React");
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.folder).toBe("React");
+
+    useSnippetStore.getState().renameFolder("React", "Frontend");
+    expect(useSnippetStore.getState().folders).toContain("Frontend");
+    expect(useSnippetStore.getState().folders).not.toContain("React");
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.folder).toBe("Frontend");
+
+    useSnippetStore.getState().deleteFolder("Frontend");
+    expect(useSnippetStore.getState().folders).not.toContain("Frontend");
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.folder).toBeUndefined();
+  });
 });
 
 describe("createSnippet", () => {

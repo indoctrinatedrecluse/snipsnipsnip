@@ -1,7 +1,7 @@
 name: Release
 
-# Builds a Windows desktop release (exe + NSIS installer) and publishes it
-# to a GitHub Release whenever a version tag is pushed (e.g. `v0.1.0`).
+# Builds a Windows desktop release (setup installer .exe + standalone .exe + portable .zip)
+# and publishes it to a GitHub Release whenever a version tag is pushed (e.g. `v1.0.0`).
 on:
   push:
     tags:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   release:
+    name: Build & Release (Windows)
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -34,12 +35,51 @@ jobs:
         with:
           workspaces: ./src-tauri
 
-      - name: Build & publish release
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Build Tauri app & create GitHub Release
+        id: tauri_build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "SnippetVault ${{ github.ref_name }}"
-          releaseDraft: true
+          releaseBody: "SnippetVault ${{ github.ref_name }} release.\n\nSee CHANGELOG.md for detailed release notes. Download the NSIS installer or portable zip below."
+          releaseDraft: false
           prerelease: false
+
+      - name: Package Portable Executable & Zip
+        shell: pwsh
+        run: |
+          $Tag = "${{ github.ref_name }}"
+          $ExePath = if (Test-Path "src-tauri/target/release/SnippetVault.exe") {
+            "src-tauri/target/release/SnippetVault.exe"
+          } elseif (Test-Path "src-tauri/target/release/snippetvault.exe") {
+            "src-tauri/target/release/snippetvault.exe"
+          } else {
+            throw "Could not find built SnippetVault executable in src-tauri/target/release/"
+          }
+
+          $PortableDir = "SnippetVault-portable"
+          $ZipName = "SnippetVault-$Tag-windows-portable.zip"
+          $StandaloneExe = "SnippetVault-$Tag-windows-x64.exe"
+
+          New-Item -ItemType Directory -Path $PortableDir -Force | Out-Null
+          Copy-Item -Path $ExePath -Destination "$PortableDir/SnippetVault.exe" -Force
+          Compress-Archive -Path "$PortableDir/*" -DestinationPath $ZipName -Force
+          Copy-Item -Path $ExePath -Destination $StandaloneExe -Force
+
+          Write-Host "Created portable archive: $ZipName"
+          Write-Host "Created standalone executable: $StandaloneExe"
+
+      - name: Upload Portable Zip and Standalone Executable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $Tag = "${{ github.ref_name }}"
+          $ZipName = "SnippetVault-$Tag-windows-portable.zip"
+          $StandaloneExe = "SnippetVault-$Tag-windows-x64.exe"
+          gh release upload $Tag $ZipName $StandaloneExe --clobber

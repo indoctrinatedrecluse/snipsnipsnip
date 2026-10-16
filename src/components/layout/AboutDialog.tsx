@@ -1,5 +1,6 @@
 import { ExternalLinkIcon, GlobeIcon } from "lucide-react";
 
+import { AppLogo } from "@/components/ui/app-logo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,9 +32,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-primary font-mono text-lg font-bold text-primary-foreground">
-              {"</>"}
-            </div>
+            <AppLogo className="size-11 rounded-xl shadow-md" size={44} />
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
                 {APP_NAME}
@@ -61,7 +60,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Technology</span>
-            <span className="font-medium">React · Tauri · Shiki</span>
+            <span className="font-medium">React · Tauri · CodeMirror · Shiki</span>
           </div>
         </div>
 

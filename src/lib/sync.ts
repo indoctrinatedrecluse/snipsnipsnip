@@ -125,7 +125,12 @@ async function deleteDriveFile(fileId: string): Promise<void> {
 
 type Decision =
   | { kind: "push"; snippet: Snippet; driveFileId?: string }
-  | { kind: "pull"; snippetId: string; driveFileId: string }
+  | {
+      kind: "pull";
+      snippetId: string;
+      driveFileId: string;
+      preserveBackupSnippet?: Snippet;
+    }
   | { kind: "delete-local"; snippetId: string }
   | { kind: "delete-remote"; snippetId: string; driveFileId: string };
 
@@ -203,10 +208,22 @@ export async function syncWithDrive(): Promise<SyncResult> {
           driveFileId: remote.driveFileId,
         });
       } else {
+        const preserveBackupSnippet: Snippet | undefined = manifestEntry
+          ? {
+              ...localSnippet,
+              id: crypto.randomUUID(),
+              title: `${localSnippet.title} (Conflict backup)`,
+              updatedAt: localSnippet.updatedAt,
+              syncedAt: undefined,
+              driveFileId: undefined,
+            }
+          : undefined;
+
         decisions.push({
           kind: "pull",
           snippetId,
           driveFileId: remote.driveFileId,
+          preserveBackupSnippet,
         });
       }
     } else if (localChanged) {
@@ -302,6 +319,9 @@ export async function syncWithDrive(): Promise<SyncResult> {
       await putSnippet(syncedSnippet);
       pushed++;
     } else if (decision.kind === "pull") {
+      if (decision.preserveBackupSnippet) {
+        await putSnippet(decision.preserveBackupSnippet);
+      }
       const remoteSnippet = await downloadFile(decision.driveFileId);
       const syncedSnippet: Snippet = {
         ...remoteSnippet,

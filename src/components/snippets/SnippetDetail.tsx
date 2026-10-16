@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
+import { FolderIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
 
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { FindReplaceBar } from "@/components/editor/FindReplaceBar";
 import { HighlightedCode } from "@/components/editor/HighlightedCode";
 import { Toolbar, type EditorMode } from "@/components/layout/Toolbar";
 import { TagInput } from "@/components/snippets/TagInput";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useFindReplace } from "@/hooks/useFindReplace";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { formatRelativeTime } from "@/hooks/useRelativeTime";
@@ -17,6 +27,10 @@ export function SnippetDetail() {
     store.snippets.find((item) => item.id === store.activeId),
   );
   const updateSnippet = useSnippetStore((store) => store.updateSnippet);
+  const restoreSnippet = useSnippetStore((store) => store.restoreSnippet);
+  const deleteSnippet = useSnippetStore((store) => store.deleteSnippet);
+  const setSnippetFolder = useSnippetStore((store) => store.setSnippetFolder);
+  const folders = useSnippetStore((store) => store.folders);
   const theme = useSettingsStore((store) => store.theme);
 
   const [mode, setMode] = useState<EditorMode>("edit");
@@ -33,15 +47,61 @@ export function SnippetDetail() {
       event.preventDefault();
       find.openFind();
     },
+    "ctrl+shift+c": async (event) => {
+      event.preventDefault();
+      if (!snippet?.code) return;
+      try {
+        await navigator.clipboard.writeText(snippet.code);
+        toast.success("Copied to clipboard");
+      } catch {
+        toast.error("Failed to copy code");
+      }
+    },
   });
 
   if (!snippet) return null;
+
+  const isTrashed = Boolean(snippet.deletedAt);
 
   const applyCodeChange = (code: string) =>
     updateSnippet(snippet.id, { code });
 
   return (
     <div className="flex h-full min-w-0 flex-col">
+      {isTrashed && (
+        <div className="flex items-center justify-between border-b bg-destructive/10 px-4 py-2 text-xs text-destructive">
+          <div className="flex items-center gap-2">
+            <Trash2Icon className="size-4" />
+            <span className="font-medium">This snippet is in Trash.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1"
+              onClick={() => {
+                restoreSnippet(snippet.id);
+                toast.success("Snippet restored");
+              }}
+            >
+              <RotateCcwIcon className="size-3.5" />
+              Restore
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-7 text-xs"
+              onClick={() => {
+                deleteSnippet(snippet.id);
+                toast.success("Permanently deleted");
+              }}
+            >
+              Delete Permanently
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2 border-b px-4 pt-4 pb-3">
         <Input
           value={snippet.title}
@@ -61,11 +121,38 @@ export function SnippetDetail() {
           aria-label="Snippet description"
           className="h-7 border-none bg-transparent px-0 text-sm text-muted-foreground shadow-none focus-visible:ring-0"
         />
-        <TagInput
-          value={snippet.tags}
-          onChange={(tags) => updateSnippet(snippet.id, { tags })}
-          className="w-full sm:max-w-md"
-        />
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <TagInput
+            value={snippet.tags}
+            onChange={(tags) => updateSnippet(snippet.id, { tags })}
+            className="w-full sm:max-w-md"
+          />
+
+          <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs">
+            <FolderIcon className="size-3.5 text-muted-foreground" />
+            <Select
+              value={snippet.folder ?? "none"}
+              onValueChange={(val) =>
+                setSnippetFolder(snippet.id, val && val !== "none" ? val : undefined)
+              }
+            >
+              <SelectTrigger
+                aria-label="Collection folder"
+                className="h-5 border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+              >
+                <SelectValue placeholder="No collection" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unfiled (no collection)</SelectItem>
+                {folders.map((folderName) => (
+                  <SelectItem key={folderName} value={folderName}>
+                    {folderName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground">
           Updated {formatRelativeTime(snippet.updatedAt)}
         </p>

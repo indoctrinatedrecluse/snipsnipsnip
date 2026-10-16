@@ -5,12 +5,17 @@ import {
   CopyPlusIcon,
   EyeIcon,
   PencilIcon,
+  RotateCcwIcon,
   StarIcon,
   Trash2Icon,
+  VariableIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GistDialog } from "@/components/snippets/GistDialog";
+import { TemplateFillDialog } from "@/components/snippets/TemplateFillDialog";
 import { Button } from "@/components/ui/button";
+import { GitHubIcon } from "@/components/ui/github-icon";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +37,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { LANGUAGE_OPTIONS } from "@/lib/languages";
+import { hasPlaceholders } from "@/lib/templates";
 import { useSnippetStore } from "@/stores/snippet-store";
 
 export type EditorMode = "edit" | "preview";
@@ -47,17 +53,28 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
     store.snippets.find((item) => item.id === snippetId),
   );
   const updateSnippet = useSnippetStore((store) => store.updateSnippet);
+  const moveToTrash = useSnippetStore((store) => store.moveToTrash);
+  const restoreSnippet = useSnippetStore((store) => store.restoreSnippet);
   const deleteSnippet = useSnippetStore((store) => store.deleteSnippet);
   const duplicateSnippet = useSnippetStore((store) => store.duplicateSnippet);
   const toggleFavorite = useSnippetStore((store) => store.toggleFavorite);
   const setActive = useSnippetStore((store) => store.setActive);
 
   const [copied, setCopied] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [gistDialogOpen, setGistDialogOpen] = useState(false);
 
   if (!snippet) return null;
 
+  const isTrashed = Boolean(snippet.deletedAt);
+  const hasVars = hasPlaceholders(snippet.code);
+
   const handleCopy = async () => {
+    if (hasVars) {
+      setTemplateDialogOpen(true);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(snippet.code);
       setCopied(true);
@@ -68,10 +85,24 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
     }
   };
 
-  const handleDelete = () => {
+  const handleMoveToTrash = () => {
+    const id = snippet.id;
+    moveToTrash(id);
+    toast("Moved snippet to Trash", {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          restoreSnippet(id);
+          setActive(id);
+        },
+      },
+    });
+  };
+
+  const handlePermanentDelete = () => {
     deleteSnippet(snippet.id);
-    setConfirmOpen(false);
-    toast.success("Snippet deleted");
+    setConfirmPermanentDelete(false);
+    toast.success("Snippet permanently deleted");
   };
 
   const handleDuplicate = () => {
@@ -92,11 +123,27 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
       </ToolbarButton>
 
       <ToolbarButton
-        label="Copy code (Ctrl+Shift+C)"
+        label={hasVars ? "Fill variables & copy" : "Copy code (Ctrl+Shift+C)"}
         onClick={() => void handleCopy()}
       >
-        {copied ? <CheckIcon /> : <CopyIcon />}
+        {copied ? (
+          <CheckIcon />
+        ) : hasVars ? (
+          <VariableIcon className="text-primary" />
+        ) : (
+          <CopyIcon />
+        )}
       </ToolbarButton>
+
+      {hasVars && (
+        <ToolbarButton
+          label="Fill template placeholders"
+          onClick={() => setTemplateDialogOpen(true)}
+          className="text-primary"
+        >
+          <VariableIcon />
+        </ToolbarButton>
+      )}
 
       <ToolbarButton label="Duplicate" onClick={handleDuplicate}>
         <CopyPlusIcon />
@@ -109,6 +156,13 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
         <StarIcon
           className={snippet.isFavorite ? "fill-amber-400 text-amber-400" : ""}
         />
+      </ToolbarButton>
+
+      <ToolbarButton
+        label="Share to GitHub Gist"
+        onClick={() => setGistDialogOpen(true)}
+      >
+        <GitHubIcon />
       </ToolbarButton>
 
       <div className="ml-auto flex items-center gap-2">
@@ -130,34 +184,75 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
           </SelectContent>
         </Select>
 
-        <ToolbarButton
-          label="Delete snippet"
-          onClick={() => setConfirmOpen(true)}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2Icon />
-        </ToolbarButton>
+        {isTrashed ? (
+          <div className="flex items-center gap-1">
+            <ToolbarButton
+              label="Restore from Trash"
+              onClick={() => {
+                restoreSnippet(snippet.id);
+                toast.success("Snippet restored");
+              }}
+            >
+              <RotateCcwIcon />
+            </ToolbarButton>
+            <ToolbarButton
+              label="Permanently delete"
+              onClick={() => setConfirmPermanentDelete(true)}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2Icon />
+            </ToolbarButton>
+          </div>
+        ) : (
+          <ToolbarButton
+            label="Move to Trash"
+            onClick={handleMoveToTrash}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2Icon />
+          </ToolbarButton>
+        )}
       </div>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog
+        open={confirmPermanentDelete}
+        onOpenChange={setConfirmPermanentDelete}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete snippet?</DialogTitle>
+            <DialogTitle>Permanently delete snippet?</DialogTitle>
             <DialogDescription>
-              “{snippet.title || "Untitled snippet"}” will be permanently
-              removed.
+              “{snippet.title || "Untitled snippet"}” will be permanently removed.
+              This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmPermanentDelete(false)}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete
+            <Button variant="destructive" onClick={handlePermanentDelete}>
+              Delete Permanently
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TemplateFillDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        title={snippet.title}
+        code={snippet.code}
+      />
+
+      <GistDialog
+        open={gistDialogOpen}
+        onOpenChange={setGistDialogOpen}
+        snippet={snippet}
+        mode="publish"
+      />
     </div>
   );
 }
