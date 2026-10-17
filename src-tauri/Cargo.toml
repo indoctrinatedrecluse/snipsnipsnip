@@ -1,6 +1,6 @@
 [package]
 name = "snippetvault"
-version = "1.0.0"
+version = "1.1.0"
 description = "SnippetVault — a modern, privacy-focused, cloud-synchronized code snippet manager."
 authors = ["SnippetVault contributors"]
 license = "MIT"

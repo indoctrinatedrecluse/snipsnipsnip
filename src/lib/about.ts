@@ -6,7 +6,7 @@
  */
 
 export const APP_NAME = "SnippetVault";
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.1.0";
 export const APP_DESCRIPTION =
   "A modern, privacy-focused, cloud-synchronized code snippet manager.";
 

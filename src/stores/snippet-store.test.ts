@@ -169,6 +169,63 @@ describe("snippet store", () => {
     expect(useSnippetStore.getState().folders).not.toContain("Frontend");
     expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.folder).toBeUndefined();
   });
+
+  it("manages multi-file tabs within a snippet bundle", () => {
+    const id = useSnippetStore.getState().addSnippet({
+      title: "Component",
+      code: "export const Button = () => null;",
+      language: "typescript",
+    });
+
+    const file2Id = useSnippetStore.getState().addSnippetFile(
+      id,
+      "styles.css",
+      ".btn { color: red; }",
+      "css",
+    );
+
+    const snippet = useSnippetStore.getState().snippets.find((s) => s.id === id);
+    expect(snippet?.files).toHaveLength(2);
+    expect(snippet?.activeFileId).toBe(file2Id);
+    expect(snippet?.code).toBe(".btn { color: red; }");
+    expect(snippet?.language).toBe("css");
+
+    // Update file 2
+    useSnippetStore.getState().updateSnippetFile(id, file2Id, { code: ".btn { color: blue; }" });
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.code).toBe(".btn { color: blue; }");
+
+    // Switch back to file 1
+    const firstFileId = snippet?.files?.[0].id ?? "";
+    useSnippetStore.getState().setActiveSnippetFile(id, firstFileId);
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.code).toBe("export const Button = () => null;");
+
+    // Delete file 2
+    useSnippetStore.getState().deleteSnippetFile(id, file2Id);
+    expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.files).toHaveLength(1);
+  });
+
+  it("creates and restores revision history snapshots", () => {
+    const id = useSnippetStore.getState().addSnippet({
+      title: "Doc",
+      code: "version 1",
+      language: "plaintext",
+    });
+
+    useSnippetStore.getState().addHistorySnapshot(id, "Initial revision");
+    useSnippetStore.getState().updateSnippet(id, { code: "version 2" });
+    useSnippetStore.getState().addHistorySnapshot(id, "Second revision");
+
+    const snippet = useSnippetStore.getState().snippets.find((s) => s.id === id);
+    expect(snippet?.history).toHaveLength(2);
+
+    const v1Entry = snippet?.history?.find((h) => h.summary === "Initial revision");
+    expect(v1Entry).toBeDefined();
+
+    if (v1Entry) {
+      useSnippetStore.getState().restoreSnippetVersion(id, v1Entry.id);
+      expect(useSnippetStore.getState().snippets.find((s) => s.id === id)?.code).toBe("version 1");
+    }
+  });
 });
 
 describe("createSnippet", () => {

@@ -1,4 +1,4 @@
-import type { Snippet } from "@/types/snippet";
+import { getSnippetFiles, type Snippet } from "@/types/snippet";
 
 export interface VsCodeSnippetEntry {
   prefix: string;
@@ -27,16 +27,33 @@ export function buildVsCodeSnippets(snippets: Snippet[]): string {
 
   for (const snippet of snippets) {
     if (snippet.deletedAt) continue;
-    const key = snippet.title || `Snippet ${snippet.id.slice(0, 8)}`;
-    const prefix = toPrefix(snippet.title);
-    const body = snippet.code.split("\n");
+    const files = getSnippetFiles(snippet);
 
-    payload[key] = {
-      prefix,
-      body,
-      description: snippet.description || undefined,
-      scope: snippet.language !== "plaintext" ? snippet.language : undefined,
-    };
+    if (files.length <= 1) {
+      const key = snippet.title || `Snippet ${snippet.id.slice(0, 8)}`;
+      const prefix = toPrefix(snippet.title);
+      const body = snippet.code.split("\n");
+
+      payload[key] = {
+        prefix,
+        body,
+        description: snippet.description || undefined,
+        scope: snippet.language !== "plaintext" ? snippet.language : undefined,
+      };
+    } else {
+      for (const file of files) {
+        const key = `${snippet.title || "Snippet"} - ${file.name}`;
+        const prefix = toPrefix(`${snippet.title}-${file.name}`);
+        const body = file.code.split("\n");
+
+        payload[key] = {
+          prefix,
+          body,
+          description: `${snippet.description ? `${snippet.description} — ` : ""}${file.name}`,
+          scope: file.language !== "plaintext" ? file.language : undefined,
+        };
+      }
+    }
   }
 
   return JSON.stringify(payload, null, 2);

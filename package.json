@@ -1,9 +1,12 @@
 {
   "name": "snippetvault",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "SnippetVault — a modern, privacy-focused, cloud-synchronized code snippet manager.",
+  "bin": {
+    "sv": "./bin/sv.mjs"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -1,4 +1,8 @@
-import type { Snippet } from "@/types/snippet";
+import {
+  getSnippetFiles,
+  type Snippet,
+  type SnippetFile,
+} from "@/types/snippet";
 
 const LANGUAGE_EXTENSIONS: Record<string, string> = {
   javascript: "js",
@@ -67,7 +71,16 @@ export async function publishToGist({
   isPublic,
   token,
 }: PublishGistOptions): Promise<PublishGistResult> {
-  const filename = getFilenameForSnippet(snippet);
+  const snippetFiles = getSnippetFiles(snippet);
+  const files: Record<string, { content: string }> = {};
+
+  for (const f of snippetFiles) {
+    const filename = f.name.trim() || `file-${f.id}.txt`;
+    files[filename] = {
+      content: f.code || " ",
+    };
+  }
+
   const response = await fetch("https://api.github.com/gists", {
     method: "POST",
     headers: {
@@ -78,11 +91,7 @@ export async function publishToGist({
     body: JSON.stringify({
       description: snippet.description || snippet.title,
       public: isPublic,
-      files: {
-        [filename]: {
-          content: snippet.code || " ",
-        },
-      },
+      files,
     }),
   });
 
@@ -100,6 +109,7 @@ export interface ImportedGistData {
   description: string;
   code: string;
   language: string;
+  files?: SnippetFile[];
 }
 
 export async function importFromGist(
@@ -137,10 +147,18 @@ export async function importFromGist(
   const firstFile = fileEntries[0];
   const detectedLang = firstFile.language?.toLowerCase() ?? "plaintext";
 
+  const importedFiles: SnippetFile[] = fileEntries.map((f) => ({
+    id: crypto.randomUUID(),
+    name: f.filename,
+    code: f.content ?? "",
+    language: f.language?.toLowerCase() ?? "plaintext",
+  }));
+
   return {
     title: data.description || firstFile.filename || "Imported from Gist",
     description: data.description ?? "",
     code: firstFile.content ?? "",
     language: detectedLang,
+    files: importedFiles,
   };
 }

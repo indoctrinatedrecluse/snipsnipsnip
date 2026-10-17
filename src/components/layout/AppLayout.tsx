@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Sidebar } from "@/components/layout/Sidebar";
+import { CommandPalette, type CommandPaletteMode } from "@/components/layout/CommandPalette";
 import { EmptyState } from "@/components/snippets/EmptyState";
 import { NewSnippetDialog } from "@/components/snippets/NewSnippetDialog";
 import { SnippetDetail } from "@/components/snippets/SnippetDetail";
@@ -13,12 +14,25 @@ export function AppLayout() {
   const activeId = useSnippetStore((store) => store.activeId);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [spotlightOpen, setSpotlightOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteMode, setCommandPaletteMode] =
+    useState<CommandPaletteMode>("files");
 
   useHotkeys({
     "ctrl+n": () => setNewDialogOpen(true),
     "ctrl+k": (event) => {
       event.preventDefault();
       setSpotlightOpen(true);
+    },
+    "ctrl+p": (event) => {
+      event.preventDefault();
+      setCommandPaletteMode("files");
+      setCommandPaletteOpen(true);
+    },
+    "ctrl+shift+p": (event) => {
+      event.preventDefault();
+      setCommandPaletteMode("commands");
+      setCommandPaletteOpen(true);
     },
     "ctrl+s": (event) => {
       event.preventDefault();
@@ -46,6 +60,13 @@ export function AppLayout() {
       <SpotlightDialog
         open={spotlightOpen}
         onOpenChange={setSpotlightOpen}
+      />
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        initialMode={commandPaletteMode}
+        onOpenNewSnippet={() => setNewDialogOpen(true)}
+        onOpenSpotlight={() => setSpotlightOpen(true)}
       />
     </div>
   );

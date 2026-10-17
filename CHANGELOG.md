@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-17
+
+### Added
+
+- **Multi-File Snippet Bundles ("Gist-Style" Multi-Tab Snippets)**:
+  - Create and manage multi-file snippet projects (e.g., `index.html`, `style.css`, `app.js`).
+  - Seamless tab bar with inline double-click tab renaming and file-type icons.
+  - Multi-file GitHub Gist publishing and importing with multi-file VS Code snippets export.
+
+- **Local Version History & Visual Diff Rollback (Time Travel)**:
+  - Automatic debounced revision checkpointing and manual snapshot saves (up to 25 checkpoints).
+  - Myers/LCS diff algorithm calculating addition/deletion lines with color-coded visual diff viewer.
+  - 1-click restore to any previous version.
+
+- **Live Code Execution & Interactive Web Sandbox**:
+  - Sandboxed `iframe` runner compiling multi-file web bundles with a `postMessage` console logger bridge.
+  - Asynchronous JavaScript/TypeScript code execution with real-time console capture (`log`, `warn`, `error`, `info`), runtime timers, and return value inspection.
+  - Shortcut trigger `Ctrl+Enter` and quick-dock drawer panel.
+
+- **Smart AI Code Actions (Multi-Provider BYOK)**:
+  - First-class multi-provider BYOK support for **Google Gemini**, **Anthropic Claude**, **DeepSeek**, **OpenAI**, and custom **OpenAI-compatible endpoints** (Ollama, LM Studio, Groq, OpenRouter).
+  - Automated code actions: Explain Code, Generate TypeScript Types, Add JSDoc / Docstrings, Generate Unit Tests, Transpile / Convert Languages, Refactor & Optimize, and Custom Prompts.
+  - 1-click Apply actions: "Replace Current Code", "Add as New File Tab", or "Copy Result".
+
+- **Zero-Knowledge Encrypted API Key Protection**:
+  - Client-side AES-GCM-256 on-device key encryption before storage.
+  - Plaintext API keys are never stored in `localStorage` or exported in sync payloads.
+  - Automatic redaction of sensitive credentials from error logs and query parameters via `x-goog-api-key` header authentication.
+  - 1-click API key purge action.
+
+- **Global System-Wide Text Expansion**:
+  - Configure abbreviation trigger prefixes (e.g. `;clg`, `;date`, `;comp`) for any snippet.
+  - Dynamic token expansion for `{{date}}`, `{{time}}`, `{{datetime}}`, `{{year}}`, `{{uuid}}`, `{{clipboard}}`, and `{{var:default}}`.
+  - Dedicated Text Expander manager dialog with live interactive expansion playground.
+
+- **Universal Command Palette (`Ctrl+P` / `Ctrl+Shift+P`)**:
+  - `Ctrl+P`: Fast fuzzy snippet & file quick-open across titles, files, tags, and collections.
+  - `Ctrl+Shift+P` (or typing `>`): Action command runner with categorized commands, keyboard navigation (`↑`/`↓`/`Enter`), and shortcut badges.
+
+- **Zero-Knowledge Encrypted Vaults**:
+  - Client-side AES-GCM-256 encryption with PBKDF2 (100,000 iterations) key derivation.
+  - Encrypted snippets remain locked and hidden on disk, sync, and UI until decrypted with passphrase.
+  - One-click lock toggle, temporary unlock, and permanent decryption removal.
+
+- **Carbon-Style Code Card Image Exporter**:
+  - Generate social code cards with 6 gradient themes (Midnight Galaxy, Sunset, Aurora, Slate, Candy, Transparent).
+  - macOS window buttons, line numbers toggle, padding adjustments, and watermark branding.
+  - High-res PNG export (2x Canvas), SVG download, and direct clipboard image copy.
+
+- **Terminal & CLI Companion (`sv`)**:
+  - Standalone command-line utility packaged as `sv` (`bin/sv.mjs`).
+  - Terminal commands: `sv list`, `sv get <title|id>`, `sv search <keyword>`, `sv add [options] <code>`, and `sv help`.
+
+---
+
 ## [1.0.0] - 2026-10-16
 
 ### Added

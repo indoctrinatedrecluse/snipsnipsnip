@@ -86,6 +86,7 @@ export function GistDialog({
         code: imported.code,
         language: imported.language,
         tags: ["gist"],
+        files: imported.files,
       });
       setActive(id);
       toast.success("Snippet imported from GitHub Gist!");

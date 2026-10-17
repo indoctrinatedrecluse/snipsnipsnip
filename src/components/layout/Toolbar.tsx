@@ -1,19 +1,31 @@
 import { useState } from "react";
 import {
+  CameraIcon,
   CheckIcon,
   CopyIcon,
   CopyPlusIcon,
   EyeIcon,
+  HistoryIcon,
+  LockIcon,
   PencilIcon,
+  PlayIcon,
   RotateCcwIcon,
+  SparklesIcon,
   StarIcon,
   Trash2Icon,
+  UnlockIcon,
   VariableIcon,
+  ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AiActionsDialog } from "@/components/ai/AiActionsDialog";
+import { TextExpanderDialog } from "@/components/expander/TextExpanderDialog";
+import { VaultDialog } from "@/components/vault/VaultDialog";
+import { CodeCardDialog } from "@/components/snippets/CodeCardDialog";
 import { GistDialog } from "@/components/snippets/GistDialog";
 import { TemplateFillDialog } from "@/components/snippets/TemplateFillDialog";
+import { VersionHistoryDialog } from "@/components/snippets/VersionHistoryDialog";
 import { Button } from "@/components/ui/button";
 import { GitHubIcon } from "@/components/ui/github-icon";
 import {
@@ -46,9 +58,17 @@ interface ToolbarProps {
   snippetId: string;
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
+  showSandbox?: boolean;
+  onToggleSandbox?: () => void;
 }
 
-export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
+export function Toolbar({
+  snippetId,
+  mode,
+  onModeChange,
+  showSandbox,
+  onToggleSandbox,
+}: ToolbarProps) {
   const snippet = useSnippetStore((store) =>
     store.snippets.find((item) => item.id === snippetId),
   );
@@ -64,6 +84,11 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
   const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [gistDialogOpen, setGistDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [expanderDialogOpen, setExpanderDialogOpen] = useState(false);
+  const [vaultDialogOpen, setVaultDialogOpen] = useState(false);
+  const [codeCardDialogOpen, setCodeCardDialogOpen] = useState(false);
 
   if (!snippet) return null;
 
@@ -122,6 +147,16 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
         {mode === "edit" ? <EyeIcon /> : <PencilIcon />}
       </ToolbarButton>
 
+      {onToggleSandbox && (
+        <ToolbarButton
+          label={showSandbox ? "Hide Sandbox Runner (Ctrl+Enter)" : "Run / Sandbox (Ctrl+Enter)"}
+          onClick={onToggleSandbox}
+          className={showSandbox ? "text-primary bg-primary/10" : "text-emerald-500 hover:text-emerald-600"}
+        >
+          <PlayIcon className="fill-current" />
+        </ToolbarButton>
+      )}
+
       <ToolbarButton
         label={hasVars ? "Fill variables & copy" : "Copy code (Ctrl+Shift+C)"}
         onClick={() => void handleCopy()}
@@ -163,6 +198,45 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
         onClick={() => setGistDialogOpen(true)}
       >
         <GitHubIcon />
+      </ToolbarButton>
+
+      <ToolbarButton
+        label="Version history & diff"
+        onClick={() => setHistoryDialogOpen(true)}
+      >
+        <HistoryIcon />
+      </ToolbarButton>
+
+      <ToolbarButton
+        label="Smart AI Actions (BYOK)"
+        onClick={() => setAiDialogOpen(true)}
+        className="text-indigo-500 hover:text-indigo-600 hover:bg-indigo-500/10"
+      >
+        <SparklesIcon />
+      </ToolbarButton>
+
+      <ToolbarButton
+        label="Text Expander & Triggers"
+        onClick={() => setExpanderDialogOpen(true)}
+        className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+      >
+        <ZapIcon />
+      </ToolbarButton>
+
+      <ToolbarButton
+        label={snippet.isEncrypted ? "Encrypted Vault (Click to unlock)" : "Encrypt snippet (AES-GCM-256)"}
+        onClick={() => setVaultDialogOpen(true)}
+        className={snippet.isEncrypted ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:text-foreground"}
+      >
+        {snippet.isEncrypted ? <LockIcon /> : <UnlockIcon />}
+      </ToolbarButton>
+
+      <ToolbarButton
+        label="Export Carbon-style Code Card"
+        onClick={() => setCodeCardDialogOpen(true)}
+        className="text-pink-500 hover:text-pink-600 hover:bg-pink-500/10"
+      >
+        <CameraIcon />
       </ToolbarButton>
 
       <div className="ml-auto flex items-center gap-2">
@@ -252,6 +326,35 @@ export function Toolbar({ snippetId, mode, onModeChange }: ToolbarProps) {
         onOpenChange={setGistDialogOpen}
         snippet={snippet}
         mode="publish"
+      />
+
+      <VersionHistoryDialog
+        open={historyDialogOpen}
+        onOpenChange={setHistoryDialogOpen}
+        snippet={snippet}
+      />
+
+      <AiActionsDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        snippet={snippet}
+      />
+
+      <TextExpanderDialog
+        open={expanderDialogOpen}
+        onOpenChange={setExpanderDialogOpen}
+      />
+
+      <VaultDialog
+        open={vaultDialogOpen}
+        onOpenChange={setVaultDialogOpen}
+        snippet={snippet}
+      />
+
+      <CodeCardDialog
+        open={codeCardDialogOpen}
+        onOpenChange={setCodeCardDialogOpen}
+        snippet={snippet}
       />
     </div>
   );
